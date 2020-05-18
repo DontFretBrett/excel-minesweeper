@@ -1,0 +1,190 @@
+Dim percentBombs As Integer
+Dim cBombs As New Collection
+Dim gameRunning As Boolean
+Dim gameBoard As Range
+Dim bgColor As Integer
+Dim clearColor As Integer
+Function isGameOver() As Boolean
+    Dim iBomb As Integer
+    Dim thisBomb As String
+    Dim isOver As Boolean
+    isOver = True
+    For iBomb = 1 To cBombs.Count
+        thisBomb = Range(cBombs.Item(iBomb)).Value
+        If Not thisBomb = "O" Then
+            isOver = False
+            Exit For
+        End If
+    Next iBomb
+    isGameOver = isOver
+End Function
+Sub revealAll()
+    Dim iBomb As Integer
+    Dim thisBomb As String
+    For iBomb = 1 To cBombs.Count
+        thisBomb = Range(cBombs.Item(iBomb)).Value
+        Debug.Print cBombs.Item(iBomb) & " - " & thisBomb
+        If thisBomb = "O" Then
+            Range(cBombs.Item(iBomb)).Value = "J"
+        Else
+            Range(cBombs.Item(iBomb)).Value = "M"
+        End If
+    Next iBomb
+    Dim theCell As Range
+    Dim foundBomb As Boolean
+    For Each theCell In gameBoard.Cells
+        If theCell.Value = "O" Then
+            foundBomb = False
+            For iBomb = 1 To cBombs.Count
+                If theCell.Address = cBombs.Item(iBomb) Then
+                    foundBomb = True
+                    Exit For
+                End If
+            Next iBomb
+            If foundBomb = False Then
+                theCell.Font.Color = RGB(255, 0, 0)
+            End If
+        End If
+    Next theCell
+End Sub
+Function checkCell(theCell As Range) As Boolean
+    Dim iBomb As Integer
+    For iBomb = 1 To cBombs.Count
+        If LCase(theCell.Address) = LCase(cBombs.Item(iBomb)) Then
+            checkCell = True
+            Exit Function
+        End If
+    Next iBomb
+    checkCell = False
+End Function
+Function countBombs(thisCell As Range, nRadius As Integer) As Integer
+    Dim nBomb As Integer
+    Dim iRow As Integer
+    Dim iCol As Integer
+    For iRow = nRadius * -1 To nRadius
+        For iCol = nRadius * -1 To nRadius
+            If Not (iRow = 0 And iCol = 0) Then
+                If thisCell.Row + iRow >= gameBoard.Row And _
+                thisCell.Row + iRow <= gameBoard.Row + gameBoard.Rows.Count - 1 And _
+                thisCell.Column + iCol >= gameBoard.Column And _
+                thisCell.Column + iCol <= gameBoard.Column + gameBoard.Columns.Count - 1 Then
+                    If checkCell(thisCell.Offset(iRow, iCol)) = True Then
+                        nBomb = nBomb + 1
+                    End If
+                End If
+            End If
+        Next iCol
+    Next iRow
+    countBombs = nBomb
+End Function
+Sub clearOut(theCell As Range, Optional nRadius As Integer = 3)
+    If countBombs(theCell, nRadius) > 0 Then
+        theCell.Font.Name = "Arial"
+        theCell.Value = countBombs(theCell, nRadius)
+        theCell.Interior.ColorIndex = clearColor
+        Exit Sub
+    End If
+    theCell.Interior.ColorIndex = clearColor
+    Dim iRow As Integer, iCol As Integer
+    For iRow = nRadius * -1 To nRadius
+        For iCol = nRadius * -1 To nRadius
+            If (Not iCol = iRow) And (Not (iRow = 0 And iCol = 0)) Then
+                If theCell.Row + iRow >= gameBoard.Row And _
+                theCell.Row + iRow <= gameBoard.Row + gameBoard.Rows.Count - 1 And _
+                theCell.Column + iCol >= gameBoard.Column And _
+                theCell.Column + iCol <= gameBoard.Column + gameBoard.Columns.Count - 1 Then
+                    If theCell.Offset(iRow, iCol).Interior.ColorIndex = bgColor Then
+                        clearOut theCell.Offset(iRow, iCol), nRadius
+                    End If
+                End If
+            End If
+        Next iCol
+    Next iRow
+End Sub
+Private Sub btnGo_Click()
+    If btnGo.Caption = "Start" Then
+        btnGo.Caption = "Stop"
+        Dim WS As Worksheet
+        Dim iRow As Integer, iCol As Integer
+        Dim iDice As Integer
+        bgColor = 16
+        clearColor = 15
+        Set WS = ActiveSheet
+        Set gameBoard = WS.Range("boardTL:boardBR")
+        gameBoard.Value = vbNullString
+        gameBoard.Interior.ColorIndex = bgColor
+        gameBoard.Font.Name = "Wingdings"
+        gameBoard.Font.Color = 0
+        gameBoard.Font.Bold = False
+        percentBombs = 10
+        Randomize
+        If cBombs.Count > 0 Then
+            Do
+                cBombs.Remove 1
+            Loop Until cBombs.Count = 0
+        End If
+        For iDice = 1 To gameBoard.Cells.Count * (percentBombs / 100)
+            cBombs.Add WS.Cells(Int(Rnd * gameBoard.Rows.Count) + gameBoard.Row, Int(Rnd * gameBoard.Columns.Count) + gameBoard.Column).Address
+        Next iDice
+        gameRunning = True
+    Else
+        btnGo.Caption = "Start"
+        gameRunning = False
+        revealAll
+    End If
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If gameRunning = False Then Exit Sub
+    If Target.Cells.Count > 1 Then
+        If (Not Target.Row > gameBoard.Row + gameBoard.Rows.Count - 1) And _
+        (Not Target.Column > gameBoard.Column + gameBoard.Columns.Count - 1) Then
+            Dim TLCell As Range
+            Set TLCell = Cells(Target.Row, Target.Column)
+            If TLCell.Value = vbNullString And TLCell.Interior.ColorIndex = bgColor Then
+                TLCell.Value = "O"
+                TLCell.Font.Bold = True
+                TLCell.Interior.ColorIndex = 35
+                If isGameOver = True Then
+                    If btnGo.Caption = "Stop" Then
+                        btnGo_Click
+                        gameRunning = False
+                        Exit Sub
+                    End If
+                End If
+            Else
+                If TLCell.Value = "O" Then
+                    TLCell.Value = vbNullString
+                    TLCell.Font.Bold = False
+                    TLCell.Interior.ColorIndex = bgColor
+                End If
+            End If
+            gameRunning = False
+            TLCell.Select
+            gameRunning = True
+        End If
+        Exit Sub
+    End If
+    If Target.Row > gameBoard.Row + gameBoard.Rows.Count - 1 Or _
+    Target.Column > gameBoard.Column + gameBoard.Columns.Count - 1 Or _
+    Target.Row < gameBoard.Row Or _
+    Target.Column < gameBoard.Column Then Exit Sub
+    If Target.Value = "O" Then Exit Sub
+    If checkCell(Target) = True Then
+        Target.Font.Color = RGB(255, 0, 0)
+        Target.Value = "M"
+        If btnGo.Caption = "Stop" Then
+            btnGo_Click
+            gameRunning = False
+            Exit Sub
+        End If
+    End If
+    If countBombs(Target, 1) = 0 Then
+        Target.Interior.ColorIndex = clearColor
+        clearOut Target, 1
+    Else
+        Target.Font.Name = "Arial"
+        Target.Value = countBombs(Target, 1)
+        Target.Interior.ColorIndex = clearColor
+    End If
+End Sub
